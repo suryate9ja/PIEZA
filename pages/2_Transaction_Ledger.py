@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from utils import show_global_sidebar, fetch_transactions, delete_transaction
+from utils import show_global_sidebar, fetch_transactions, delete_transaction, get_bank_domain
 
 # Page config
 st.set_page_config(page_title="Ledger - PIEZA", layout="wide")
@@ -19,30 +19,6 @@ if df.empty:
 else:
     # Map bank names to simplified domains for ClearBit
     # A robust app would use a verified mapping or search API, but for simplicity we assume .com
-    def get_bank_domain(bank_name):
-        if not bank_name:
-            return ""
-        # simple heuristic assuming domains like chase.com, bofa.com, etc.
-        clean_name = str(bank_name).lower().replace(" ", "")
-        
-        # Add basic overrides for popular banks
-        overrides = {
-            "bankofamerica": "bankofamerica.com",
-            "bofa": "bankofamerica.com",
-            "chase": "chase.com",
-            "wellsfargo": "wellsfargo.com",
-            "citibank": "citi.com",
-            "citi": "citi.com",
-            "hdfc": "hdfcbank.com",
-            "icici": "icicibank.com",
-            "sbi": "onlinesbi.sbi",
-            "americanexpress": "americanexpress.com",
-            "amex": "americanexpress.com"
-        }
-        
-        domain = overrides.get(clean_name, f"{clean_name}.com")
-        return f"https://logo.clearbit.com/{domain}"
-        
     df["Bank Logo"] = df["Bank Name"].apply(get_bank_domain)
     
     # Reorder columns for display
@@ -73,12 +49,7 @@ else:
             tx_ids = df["ID"].astype(str).tolist()
             
             # Create a dictionary mapping ID to a readable string for the multiselect
-            options_map = {}
-            for _, row in df.iterrows():
-                try: # handle missing columns gracefully
-                    options_map[str(row["ID"])] = f"{row.get('Date','')} - {row.get('Category','')} - {row.get('Amount','')} ({row.get('Type','')})"
-                except Exception:
-                    options_map[str(row["ID"])] = str(row["ID"])
+            options_map = create_options_map(df)
             
             selected_ids = st.multiselect(
                 "Select transactions to delete:", 
