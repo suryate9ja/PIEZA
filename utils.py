@@ -196,3 +196,37 @@ def delete_transaction(tx_ids_to_delete):
             return False
     return False
 
+def get_bank_domain(bank_name):
+    """
+    Returns a secure URL for the bank logo using ClearBit.
+    Validates the bank name to prevent URL injection.
+    """
+    if not bank_name:
+        return ""
+
+    # simple heuristic assuming domains like chase.com, bofa.com, etc.
+    clean_name = str(bank_name).lower().replace(" ", "")
+
+    # Add basic overrides for popular banks
+    overrides = {
+        "bankofamerica": "bankofamerica.com",
+        "bofa": "bankofamerica.com",
+        "chase": "chase.com",
+        "wellsfargo": "wellsfargo.com",
+        "citibank": "citi.com",
+        "citi": "citi.com",
+        "hdfc": "hdfcbank.com",
+        "icici": "icicibank.com",
+        "sbi": "onlinesbi.sbi",
+        "americanexpress": "americanexpress.com",
+        "amex": "americanexpress.com"
+    }
+
+    domain = overrides.get(clean_name, f"{clean_name}.com")
+
+    # Security Validation: Ensure domain only contains safe characters
+    # Allowed: alphanumeric, hyphen, dot
+    if not re.match(r"^[a-z0-9.-]+$", domain):
+        return "" # Return empty string or a default safe image URL if invalid
+
+    return f"https://logo.clearbit.com/{domain}"
