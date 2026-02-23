@@ -1,7 +1,10 @@
 import streamlit as st
 import os
+from typing import Any, Dict, List, Optional
+import gspread
+import pandas as pd
 
-def show_global_sidebar():
+def show_global_sidebar() -> None:
     """
     Renders the global sidebar used across all pages in the app.
     Handles user profiles, profile pictures, and the Gemini API key.
@@ -82,11 +85,9 @@ def show_global_sidebar():
         st.sidebar.success("API Key configured.")
 
 # Database Functions using Google Sheets
-import gspread
-import pandas as pd
 
 @st.cache_resource
-def get_db_connection():
+def get_db_connection() -> Optional[gspread.Worksheet]:
     """
     Connect to Google Sheets using credentials from st.secrets.
     Handles both nested [gcp_service_account] format and direct JSON structure.
@@ -117,7 +118,7 @@ def get_db_connection():
         st.error(f"Error connecting to Google Sheets: {e}")
         return None
 
-def fetch_transactions():
+def fetch_transactions() -> pd.DataFrame:
     """Fetches all transactions from the Google Sheet and returns a DataFrame."""
     worksheet = get_db_connection()
     if worksheet is None:
@@ -134,7 +135,7 @@ def fetch_transactions():
         st.warning("Could not fetch records. Please ensure row 1 has headers (ID, Profile, Date, Type, Category, Amount, Bank Name, Has Proof).")
         return pd.DataFrame()
 
-def add_transaction(tx_data):
+def add_transaction(tx_data: Dict[str, Any]) -> bool:
     """Appends a new transaction row to the Google Sheet."""
     worksheet = get_db_connection()
     if worksheet is not None:
@@ -161,7 +162,7 @@ def add_transaction(tx_data):
             return False
     return False
 
-def delete_transaction(tx_ids_to_delete):
+def delete_transaction(tx_ids_to_delete: List[str]) -> bool:
     """Deletes transactions from the Google Sheet based on their IDs."""
     worksheet = get_db_connection()
     if worksheet is not None:
