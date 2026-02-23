@@ -1,78 +1,66 @@
 import pytest
-from unittest.mock import MagicMock
-import sys
-import os
-
-# Add root directory to sys.path to ensure utils can be imported
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
+from unittest.mock import MagicMock, patch, call
 import utils
 
-def test_add_transaction_success(mocker):
-    """Test add_transaction successfully appends a row."""
-    # Mock get_db_connection
+def test_delete_transaction_happy_path():
+    """Test successful deletion of transactions."""
+    tx_ids = ["TX123", "TX125"]
+
     mock_worksheet = MagicMock()
-    mock_get_db = mocker.patch('utils.get_db_connection', return_value=mock_worksheet)
-
-    tx_data = {
-        "ID": "123",
-        "Profile": "TestProfile",
-        "Date": "2023-10-27",
-        "Type": "Expense",
-        "Category": "Food",
-        "Amount": 50.0,
-        "Bank Name": "TestBank",
-        "Has Proof": True
-    }
-
-    result = utils.add_transaction(tx_data)
-
-    assert result is True
-
-    expected_row = [
-        "123", "TestProfile", "2023-10-27", "Expense", "Food", 50.0, "TestBank", "True"
+    # Mock records. Row 1 is header.
+    # idx 0 -> row 2: ID=TX123
+    # idx 1 -> row 3: ID=TX124
+    # idx 2 -> row 4: ID=TX125
+    records = [
+        {"ID": "TX123", "Amount": 100},
+        {"ID": "TX124", "Amount": 200},
+        {"ID": "TX125", "Amount": 300},
     ]
-    mock_worksheet.append_row.assert_called_once_with(expected_row)
+    mock_worksheet.get_all_records.return_value = records
 
-def test_add_transaction_connection_failure(mocker):
-    """Test add_transaction returns False when connection fails."""
-    mocker.patch('utils.get_db_connection', return_value=None)
+    with patch("utils.get_db_connection", return_value=mock_worksheet):
+        # Act
+        result = utils.delete_transaction(tx_ids)
 
-    tx_data = {"ID": "123"}
-    result = utils.add_transaction(tx_data)
+        # Assert
+        assert result is True
 
-    assert result is False
+        # Should delete row 4 then row 2 (descending order)
+        calls = mock_worksheet.delete_row.call_args_list
+        assert len(calls) == 2
+        assert calls[0] == call(4)
+        assert calls[1] == call(2)
 
-def test_add_transaction_append_exception(mocker):
-    """Test add_transaction returns False and logs error on append exception."""
+def test_delete_transaction_not_found():
+    """Test when transactions to delete are not found."""
+    tx_ids = ["TX999"]
     mock_worksheet = MagicMock()
-    mock_worksheet.append_row.side_effect = Exception("API Error")
-    mocker.patch('utils.get_db_connection', return_value=mock_worksheet)
+    records = [{"ID": "TX123"}]
+    mock_worksheet.get_all_records.return_value = records
 
-    # Mock streamlit.error
-    mock_st_error = mocker.patch('streamlit.error')
+    with patch("utils.get_db_connection", return_value=mock_worksheet):
+        result = utils.delete_transaction(tx_ids)
+        assert result is True
+        mock_worksheet.delete_row.assert_not_called()
 
-    tx_data = {"ID": "123"}
-    result = utils.add_transaction(tx_data)
+def test_delete_transaction_connection_fail():
+    """Test when get_db_connection returns None."""
+    with patch("utils.get_db_connection", return_value=None):
+        result = utils.delete_transaction(["TX123"])
+        assert result is False
 
-    assert result is False
-    mock_st_error.assert_called_once()
-    assert "Error saving to Google Sheets" in str(mock_st_error.call_args)
-
-def test_add_transaction_defaults(mocker):
-    """Test add_transaction uses default values for missing keys."""
+def test_delete_transaction_exception(mock_streamlit):
+    """Test exception handling during deletion."""
     mock_worksheet = MagicMock()
-    mocker.patch('utils.get_db_connection', return_value=mock_worksheet)
+    mock_worksheet.get_all_records.side_effect = Exception("API Error")
 
-    # Empty dictionary
-    tx_data = {}
+    # We verify st.error is called
+    mock_st_error = mock_streamlit.error
 
-    result = utils.add_transaction(tx_data)
+    with patch("utils.get_db_connection", return_value=mock_worksheet):
+        result = utils.delete_transaction(["TX123"])
 
-    assert result is True
-
-    # Defaults: ID="", Profile="", Date="", Type="", Category="", Amount=0.0, Bank Name="", Has Proof=False
-    expected_row = [
-        "", "", "", "", "", 0.0, "", "False"
-    ]
-    mock_worksheet.append_row.assert_called_once_with(expected_row)
+        assert result is False
+        mock_st_error.assert_called_once()
+        args, _ = mock_st_error.call_args
+        assert "API Error" in args[0]
