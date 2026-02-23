@@ -17,6 +17,8 @@ df = fetch_transactions()
 if df.empty:
     st.info("No transactions found. Go to the Data Entry page to add some, or ensure your Google Sheet 'PIEZA_DB' has correct headers in Row 1.")
 else:
+    # Map bank names to simplified domains for ClearBit
+    # A robust app would use a verified mapping or search API, but for simplicity we assume .com
     df["Bank Logo"] = df["Bank Name"].apply(get_bank_domain)
     
     # Reorder columns for display
