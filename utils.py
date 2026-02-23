@@ -89,16 +89,24 @@ import pandas as pd
 def get_db_connection():
     """
     Connect to Google Sheets using credentials from st.secrets.
+    Handles both nested [gcp_service_account] format and direct JSON structure.
     """
-    if "gcp_service_account" not in st.secrets:
-        st.error("Missing Google Cloud credentials in secrets.toml!")
-        return None
-        
     try:
-        # The new gspread way to auth from a dict:
-        gc = gspread.service_account_from_dict(st.secrets["gcp_service_account"])
+        # If user pasted the TOML format exactly, it's under the key "gcp_service_account"
+        if "gcp_service_account" in st.secrets:
+            # Convert Streamlit's AttrDict to a standard python dict for gspread
+            creds_dict = dict(st.secrets["gcp_service_account"])
+        # If user pasted the raw JSON file into the Streamlit secrets box directly
+        elif "project_id" in st.secrets and "private_key" in st.secrets:
+            # We copy the entire top-level secrets object into a standard dict
+            creds_dict = dict(st.secrets)
+        else:
+            st.error("Missing Google Cloud credentials in Streamlit secrets!")
+            return None
+        
+        # The new gspread way to auth from a dict
+        gc = gspread.service_account_from_dict(creds_dict)
         # Connect to a default sheet name "PIEZA_DB"
-        # The user must create a sheet named precisely this and share it with the service account email
         sh = gc.open("PIEZA_DB")
         worksheet = sh.sheet1
         return worksheet
