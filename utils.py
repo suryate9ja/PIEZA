@@ -118,6 +118,7 @@ def get_db_connection():
         st.error(f"Error connecting to Google Sheets: {e}")
         return None
 
+@st.cache_data
 def fetch_transactions():
     """Fetches all transactions from the Google Sheet and returns a DataFrame."""
     worksheet = get_db_connection()
@@ -156,6 +157,8 @@ def add_transaction(tx_data):
                 str(tx_data.get("Has Proof", False))
             ]
             worksheet.append_row(row)
+            # Clear cache after modification
+            fetch_transactions.clear()
             return True
         except Exception as e:
             st.error(f"Error saving to Google Sheets: {e}")
@@ -182,7 +185,9 @@ def delete_transaction(tx_ids_to_delete):
             
             for row_num in rows_to_delete:
                 worksheet.delete_row(row_num)
-                
+
+            # Clear cache after modification
+            fetch_transactions.clear()
             return True
         except Exception as e:
             st.error(f"Error deleting from Google Sheets: {e}")
