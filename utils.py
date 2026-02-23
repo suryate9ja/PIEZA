@@ -134,6 +134,45 @@ def fetch_transactions():
         st.warning("Could not fetch records. Please ensure row 1 has headers (ID, Profile, Date, Type, Category, Amount, Bank Name, Has Proof).")
         return pd.DataFrame()
 
+def create_options_map(df):
+    """
+    Creates a dictionary mapping transaction ID to a readable string for multiselect.
+    Optimized to use vectorization instead of iterrows.
+    """
+    if df.empty:
+        return {}
+
+    # Ensure ID is string
+    if "ID" not in df.columns:
+        # If ID is missing, we cannot map anything.
+        # But based on original code usage, caller checks for ID presence.
+        return {}
+
+    ids = df["ID"].astype(str)
+
+    # Handle missing columns by creating a temporary dataframe with ensured columns
+    # We use a copy to avoid modifying the original dataframe
+    temp_df = df.copy()
+
+    required_cols = ['Date', 'Category', 'Amount', 'Type']
+    for col in required_cols:
+        if col not in temp_df.columns:
+            temp_df[col] = ''
+        else:
+            # Convert to string to handle NaNs as 'nan', None as 'None', etc. matching original behavior
+            temp_df[col] = temp_df[col].astype(str)
+
+    # Vectorized string concatenation
+    # Format: "{Date} - {Category} - {Amount} ({Type})"
+    formatted_strings = (
+        temp_df['Date'] + " - " +
+        temp_df['Category'] + " - " +
+        temp_df['Amount'] + " (" +
+        temp_df['Type'] + ")"
+    )
+
+    return dict(zip(ids, formatted_strings))
+
 def add_transaction(tx_data):
     """Appends a new transaction row to the Google Sheet."""
     worksheet = get_db_connection()
@@ -187,4 +226,3 @@ def delete_transaction(tx_ids_to_delete):
             st.error(f"Error deleting from Google Sheets: {e}")
             return False
     return False
-
