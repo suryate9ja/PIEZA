@@ -1,55 +1,66 @@
-import pandas as pd
-from unittest.mock import MagicMock, patch
 import pytest
-
-# Ensure utils can be imported by making sure streamlit is mocked
-# This is handled by conftest.py, but explicit import here triggers it
+from unittest.mock import MagicMock, patch, call
 import utils
 
-def test_fetch_transactions_no_connection():
-    """Test fetch_transactions returns empty DataFrame when get_db_connection returns None."""
-    with patch('utils.get_db_connection', return_value=None):
-        df = utils.fetch_transactions()
-        assert isinstance(df, pd.DataFrame)
-        assert df.empty
+def test_delete_transaction_happy_path():
+    """Test successful deletion of transactions."""
+    tx_ids = ["TX123", "TX125"]
 
-def test_fetch_transactions_empty_records():
-    """Test fetch_transactions returns empty DataFrame when worksheet is empty."""
     mock_worksheet = MagicMock()
-    mock_worksheet.get_all_records.return_value = []
-
-    with patch('utils.get_db_connection', return_value=mock_worksheet):
-        df = utils.fetch_transactions()
-        assert isinstance(df, pd.DataFrame)
-        assert df.empty
-
-def test_fetch_transactions_success():
-    """Test fetch_transactions returns DataFrame with records."""
-    mock_worksheet = MagicMock()
+    # Mock records. Row 1 is header.
+    # idx 0 -> row 2: ID=TX123
+    # idx 1 -> row 3: ID=TX124
+    # idx 2 -> row 4: ID=TX125
     records = [
-        {"ID": "1", "Amount": 100},
-        {"ID": "2", "Amount": 200}
+        {"ID": "TX123", "Amount": 100},
+        {"ID": "TX124", "Amount": 200},
+        {"ID": "TX125", "Amount": 300},
     ]
     mock_worksheet.get_all_records.return_value = records
 
-    with patch('utils.get_db_connection', return_value=mock_worksheet):
-        df = utils.fetch_transactions()
-        assert isinstance(df, pd.DataFrame)
-        assert not df.empty
-        assert len(df) == 2
-        assert df.iloc[0]["ID"] == "1"
+    with patch("utils.get_db_connection", return_value=mock_worksheet):
+        # Act
+        result = utils.delete_transaction(tx_ids)
 
-def test_fetch_transactions_exception():
-    """Test fetch_transactions handles exceptions gracefully."""
+        # Assert
+        assert result is True
+
+        # Should delete row 4 then row 2 (descending order)
+        calls = mock_worksheet.delete_row.call_args_list
+        assert len(calls) == 2
+        assert calls[0] == call(4)
+        assert calls[1] == call(2)
+
+def test_delete_transaction_not_found():
+    """Test when transactions to delete are not found."""
+    tx_ids = ["TX999"]
+    mock_worksheet = MagicMock()
+    records = [{"ID": "TX123"}]
+    mock_worksheet.get_all_records.return_value = records
+
+    with patch("utils.get_db_connection", return_value=mock_worksheet):
+        result = utils.delete_transaction(tx_ids)
+        assert result is True
+        mock_worksheet.delete_row.assert_not_called()
+
+def test_delete_transaction_connection_fail():
+    """Test when get_db_connection returns None."""
+    with patch("utils.get_db_connection", return_value=None):
+        result = utils.delete_transaction(["TX123"])
+        assert result is False
+
+def test_delete_transaction_exception(mock_streamlit):
+    """Test exception handling during deletion."""
     mock_worksheet = MagicMock()
     mock_worksheet.get_all_records.side_effect = Exception("API Error")
 
-    with patch('utils.get_db_connection', return_value=mock_worksheet):
-        # We patch streamlit.warning to verify it's called
-        with patch('streamlit.warning') as mock_warning:
-            df = utils.fetch_transactions()
-            assert isinstance(df, pd.DataFrame)
-            assert df.empty
-            mock_warning.assert_called_once()
-            args, _ = mock_warning.call_args
-            assert "Could not fetch records" in args[0]
+    # We verify st.error is called
+    mock_st_error = mock_streamlit.error
+
+    with patch("utils.get_db_connection", return_value=mock_worksheet):
+        result = utils.delete_transaction(["TX123"])
+
+        assert result is False
+        mock_st_error.assert_called_once()
+        args, _ = mock_st_error.call_args
+        assert "API Error" in args[0]

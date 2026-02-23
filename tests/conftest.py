@@ -1,36 +1,22 @@
 import sys
-from unittest.mock import MagicMock
+import os
 import pytest
+from unittest.mock import MagicMock
 
-# Mock streamlit before any tests run
-st_mock = MagicMock()
+# Add the project root to sys.path so we can import utils
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-# Mock st.cache_resource as a simple decorator that just returns the function
-def cache_resource(func):
-    return func
-st_mock.cache_resource = cache_resource
+# Create the mock object once
+mock_st = MagicMock()
+mock_st.secrets = {}
+mock_st.session_state = {}
+mock_st.cache_resource = lambda func: func
+mock_st.cache_data = lambda func: func
 
-# Mock st.session_state to allow attribute access
-class SessionState(dict):
-    def __getattr__(self, item):
-        try:
-            return self[item]
-        except KeyError:
-            raise AttributeError(item)
-    def __setattr__(self, key, value):
-        self[key] = value
+# Patch sys.modules immediately to intercept imports in test files
+sys.modules["streamlit"] = mock_st
 
-st_mock.session_state = SessionState()
-
-# Mock st.secrets as a dict
-st_mock.secrets = {}
-
-# Mock st.sidebar
-st_mock.sidebar = MagicMock()
-
-# Mock st.warning and st.error
-st_mock.warning = MagicMock()
-st_mock.error = MagicMock()
-
-# Assign the mock to sys.modules['streamlit']
-sys.modules["streamlit"] = st_mock
+@pytest.fixture
+def mock_streamlit():
+    """Fixture to access the mocked streamlit module in tests."""
+    return mock_st
