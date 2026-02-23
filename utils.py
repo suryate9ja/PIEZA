@@ -1,8 +1,10 @@
 import streamlit as st
 import os
-from typing import Any, Dict, List, Optional
-import gspread
-import pandas as pd
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 def show_global_sidebar() -> None:
     """
@@ -115,7 +117,8 @@ def get_db_connection() -> Optional[gspread.Worksheet]:
         st.error("Google Sheet 'PIEZA_DB' not found. Please create it and share it with the service account email.")
         return None
     except Exception as e:
-        st.error(f"Error connecting to Google Sheets: {e}")
+        logger.error(f"Error connecting to Google Sheets: {e}", exc_info=True)
+        st.error("An unexpected error occurred while connecting to Google Sheets. Please check the logs.")
         return None
 
 def fetch_transactions() -> pd.DataFrame:
@@ -158,7 +161,8 @@ def add_transaction(tx_data: Dict[str, Any]) -> bool:
             worksheet.append_row(row)
             return True
         except Exception as e:
-            st.error(f"Error saving to Google Sheets: {e}")
+            logger.error(f"Error saving to Google Sheets: {e}", exc_info=True)
+            st.error("An error occurred while saving to Google Sheets. Please check the logs.")
             return False
     return False
 
@@ -185,7 +189,42 @@ def delete_transaction(tx_ids_to_delete: List[str]) -> bool:
                 
             return True
         except Exception as e:
-            st.error(f"Error deleting from Google Sheets: {e}")
+            logger.error(f"Error deleting from Google Sheets: {e}", exc_info=True)
+            st.error("An error occurred while deleting from Google Sheets. Please check the logs.")
             return False
     return False
 
+def get_bank_domain(bank_name):
+    """
+    Returns a secure URL for the bank logo using ClearBit.
+    Validates the bank name to prevent URL injection.
+    """
+    if not bank_name:
+        return ""
+
+    # simple heuristic assuming domains like chase.com, bofa.com, etc.
+    clean_name = str(bank_name).lower().replace(" ", "")
+
+    # Add basic overrides for popular banks
+    overrides = {
+        "bankofamerica": "bankofamerica.com",
+        "bofa": "bankofamerica.com",
+        "chase": "chase.com",
+        "wellsfargo": "wellsfargo.com",
+        "citibank": "citi.com",
+        "citi": "citi.com",
+        "hdfc": "hdfcbank.com",
+        "icici": "icicibank.com",
+        "sbi": "onlinesbi.sbi",
+        "americanexpress": "americanexpress.com",
+        "amex": "americanexpress.com"
+    }
+
+    domain = overrides.get(clean_name, f"{clean_name}.com")
+
+    # Security Validation: Ensure domain only contains safe characters
+    # Allowed: alphanumeric, hyphen, dot
+    if not re.match(r"^[a-z0-9.-]+$", domain):
+        return "" # Return empty string or a default safe image URL if invalid
+
+    return f"https://logo.clearbit.com/{domain}"
