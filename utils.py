@@ -1,5 +1,46 @@
 import streamlit as st
 import os
+import json
+from datetime import datetime
+
+def parse_gemini_response(response_text):
+    """
+    Parses the JSON response from Gemini, cleaning up markdown formatting if present.
+    Returns a dictionary with 'Date', 'Amount', 'Bank Name', and 'Type'.
+    """
+    # Clean up any potential markdown formatting
+    raw_text = response_text.replace("```json", "").replace("```", "").strip()
+
+    try:
+        extracted_data = json.loads(raw_text)
+    except (json.JSONDecodeError, TypeError):
+        extracted_data = {}
+
+    # Parse date
+    try:
+        date_str = extracted_data.get("Date", "")
+        if not date_str:
+            parsed_date = datetime.today().date()
+        else:
+            # Handle potential datetime object if json.loads somehow returned it (unlikely but safe)
+            if isinstance(date_str, datetime):
+                parsed_date = date_str.date()
+            else:
+                parsed_date = datetime.strptime(str(date_str), "%Y-%m-%d").date()
+    except (ValueError, TypeError):
+        parsed_date = datetime.today().date()
+
+    try:
+        amount = float(extracted_data.get("Amount", 0.0))
+    except (ValueError, TypeError):
+        amount = 0.0
+
+    return {
+        "Date": parsed_date,
+        "Amount": amount,
+        "Bank Name": str(extracted_data.get("Bank Name", "")),
+        "Type": str(extracted_data.get("Type", "Expense")),
+    }
 
 def show_global_sidebar():
     """

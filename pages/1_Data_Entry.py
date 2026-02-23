@@ -1,8 +1,7 @@
 import streamlit as st
-from utils import show_global_sidebar
+from utils import show_global_sidebar, parse_gemini_response
 import google.generativeai as genai
 from PIL import Image
-import json
 from datetime import datetime
 
 # Page config
@@ -51,21 +50,14 @@ if st.session_state.gemini_api_key:
                 
                 response = model.generate_content([prompt, image])
                 
-                # Parse JSON
-                # Clean up any potential markdown formatting in response if the model didn't listen
-                raw_text = response.text.replace("```json", "").replace("```", "").strip()
-                extracted_data = json.loads(raw_text)
-                
-                try:
-                    parsed_date = datetime.strptime(extracted_data.get("Date", str(datetime.today().date())), "%Y-%m-%d").date()
-                except ValueError:
-                    parsed_date = datetime.today().date()
+                # Parse JSON using utility function
+                extracted_data = parse_gemini_response(response.text)
                     
                 st.session_state.draft_tx = {
-                    "Date": parsed_date,
-                    "Amount": float(extracted_data.get("Amount", 0.0)),
-                    "Bank Name": str(extracted_data.get("Bank Name", "")),
-                    "Type": str(extracted_data.get("Type", "Expense")),
+                    "Date": extracted_data["Date"],
+                    "Amount": extracted_data["Amount"],
+                    "Bank Name": extracted_data["Bank Name"],
+                    "Type": extracted_data["Type"],
                     "Category": st.session_state.draft_tx.get("Category", "Groceries")
                 }
                 st.success("Data extracted successfully! Please review below.")
