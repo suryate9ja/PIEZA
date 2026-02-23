@@ -19,7 +19,8 @@ def show_global_sidebar():
         st.session_state.profile_pictures = {}
         
     if 'gemini_api_key' not in st.session_state:
-        st.session_state.gemini_api_key = ""
+        # Check if the user has provided the API key in Streamlit Secrets
+        st.session_state.gemini_api_key = st.secrets.get("gemini_api_key", "")
 
     # User Profiles Section
     st.sidebar.header("User Profile")
@@ -69,7 +70,7 @@ def show_global_sidebar():
         "Gemini API Key", 
         value=st.session_state.gemini_api_key, 
         type="password",
-        help="Required for OCR and AI Advisor features."
+        help="Required for OCR and AI Advisor features. Can also be set in Streamlit Secrets."
     )
     if api_key != st.session_state.gemini_api_key:
         st.session_state.gemini_api_key = api_key
