@@ -3,6 +3,8 @@ import os
 import logging
 from typing import Optional, Dict, Any, List
 import re
+import gspread
+import pandas as pd
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
