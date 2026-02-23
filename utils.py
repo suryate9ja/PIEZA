@@ -83,7 +83,6 @@ def show_global_sidebar():
 
 # Database Functions using Google Sheets
 import gspread
-from oauth2client.service_account import ServiceAccountCredentials
 import pandas as pd
 
 @st.cache_resource
