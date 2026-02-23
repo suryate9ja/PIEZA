@@ -1,9 +1,11 @@
 import streamlit as st
-from utils import show_global_sidebar
-import google.generativeai as genai
-from PIL import Image
+import uuid
 import json
 from datetime import datetime
+from PIL import Image
+import google.generativeai as genai
+
+from utils import show_global_sidebar, add_transaction
 
 # Page config
 st.set_page_config(page_title="Data Entry - PIEZA", layout="wide")
@@ -84,27 +86,24 @@ with st.form("manual_entry_form", clear_on_submit=True):
     
     with col1:
         tx_type = st.selectbox("Type", ["Income", "Expense"], 
-                               index=0 if st.session_state.draft_tx["Type"] == "Income" else 1)
+                               index=0 if st.session_state.draft_tx["Type"] == "Income" else 1, key="form_type")
         amount = st.number_input("Amount", min_value=0.0, format="%.2f", step=10.0, 
-                                 value=st.session_state.draft_tx["Amount"])
+                                 value=float(st.session_state.draft_tx["Amount"]), key="form_amount")
         
         categories = ["Groceries", "Rent", "Loan EMI", "Salary", "Utilities", "Transport", "Entertainment", "Other"]
         category = st.selectbox("Category", categories, 
-                                index=categories.index(st.session_state.draft_tx["Category"]) if st.session_state.draft_tx["Category"] in categories else 0)
+                                index=categories.index(st.session_state.draft_tx["Category"]) if st.session_state.draft_tx["Category"] in categories else 0, key="form_category")
     
     with col2:
-        date_input = st.date_input("Date", st.session_state.draft_tx["Date"])
-        bank_name = st.text_input("Bank Name", value=st.session_state.draft_tx["Bank Name"])
-        proof_file = st.file_uploader("Upload Receipt/Bill Proof", type=["png", "jpg", "jpeg", "pdf"])
+        date_input = st.date_input("Date", st.session_state.draft_tx["Date"], key="form_date")
+        bank_name = st.text_input("Bank Name", value=st.session_state.draft_tx["Bank Name"], key="form_bank_name")
+        proof_file = st.file_uploader("Upload Receipt/Bill Proof", type=["png", "jpg", "jpeg", "pdf"], key="form_proof")
 
     submit_button = st.form_submit_button("Save Transaction")
     
     if submit_button:
         if amount > 0:
-            import uuid
             tx_id = str(uuid.uuid4())
-            
-            from utils import add_transaction
             
             # Simple proof tracking (just filename/boolean for local test)
             has_proof = bool(proof_file is not None)

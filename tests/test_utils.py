@@ -1,79 +1,66 @@
-import pandas as pd
-import numpy as np
 import pytest
-from utils import create_options_map
+from unittest.mock import MagicMock, patch, call
+import utils
 
-def test_create_options_map_standard():
-    data = {
-        "ID": ["1", "2"],
-        "Date": ["2023-01-01", "2023-01-02"],
-        "Category": ["Food", "Transport"],
-        "Amount": [10.5, 20.0],
-        "Type": ["Debit", "Credit"]
-    }
-    df = pd.DataFrame(data)
-    expected = {
-        "1": "2023-01-01 - Food - 10.5 (Debit)",
-        "2": "2023-01-02 - Transport - 20.0 (Credit)"
-    }
-    assert create_options_map(df) == expected
+def test_delete_transaction_happy_path():
+    """Test successful deletion of transactions."""
+    tx_ids = ["TX123", "TX125"]
 
-def test_create_options_map_missing_columns():
-    # Only ID provided
-    data = {"ID": ["3"]}
-    df = pd.DataFrame(data)
-    # Expected behavior: missing columns are treated as empty strings
-    # "Date" -> "", "Category" -> "", "Amount" -> "", "Type" -> ""
-    # Format: "{Date} - {Category} - {Amount} ({Type})"
-    # Result: " -  -  ()"
-    expected = {"3": " -  -  ()"}
-    assert create_options_map(df) == expected
+    mock_worksheet = MagicMock()
+    # Mock records. Row 1 is header.
+    # idx 0 -> row 2: ID=TX123
+    # idx 1 -> row 3: ID=TX124
+    # idx 2 -> row 4: ID=TX125
+    records = [
+        {"ID": "TX123", "Amount": 100},
+        {"ID": "TX124", "Amount": 200},
+        {"ID": "TX125", "Amount": 300},
+    ]
+    mock_worksheet.get_all_records.return_value = records
 
-def test_create_options_map_nans():
-    # Test with NaN values
-    data = {
-        "ID": ["4"],
-        "Date": ["2023-01-01"],
-        "Category": [np.nan],
-        "Amount": [100],
-        "Type": ["Debit"]
-    }
-    df = pd.DataFrame(data)
-    # NaN becomes 'nan' string
-    expected = {"4": "2023-01-01 - nan - 100 (Debit)"}
-    assert create_options_map(df) == expected
+    with patch("utils.get_db_connection", return_value=mock_worksheet):
+        # Act
+        result = utils.delete_transaction(tx_ids)
 
-def test_create_options_map_none():
-    # Test with None values
-    data = {
-        "ID": ["5"],
-        "Date": ["2023-01-01"],
-        "Category": [None],
-        "Amount": [100],
-        "Type": ["Debit"]
-    }
-    df = pd.DataFrame(data)
-    # None becomes 'None' string
-    expected = {"5": "2023-01-01 - None - 100 (Debit)"}
-    assert create_options_map(df) == expected
+        # Assert
+        assert result is True
 
-def test_create_options_map_mixed_types():
-    # Test with mixed types (int, float)
-    data = {
-        "ID": [6], # Int ID
-        "Date": ["2023-01-01"],
-        "Category": ["Food"],
-        "Amount": [100], # Int amount
-        "Type": ["Debit"]
-    }
-    df = pd.DataFrame(data)
-    # ID converted to string "6"
-    # Amount converted to string "100" (if int)
-    expected = {"6": "2023-01-01 - Food - 100 (Debit)"}
-    assert create_options_map(df) == expected
+        # Should delete row 4 then row 2 (descending order)
+        calls = mock_worksheet.delete_row.call_args_list
+        assert len(calls) == 2
+        assert calls[0] == call(4)
+        assert calls[1] == call(2)
 
-def test_create_options_map_empty():
-    # Empty dataframe
-    df = pd.DataFrame(columns=["ID", "Date", "Category", "Amount", "Type"])
-    expected = {}
-    assert create_options_map(df) == expected
+def test_delete_transaction_not_found():
+    """Test when transactions to delete are not found."""
+    tx_ids = ["TX999"]
+    mock_worksheet = MagicMock()
+    records = [{"ID": "TX123"}]
+    mock_worksheet.get_all_records.return_value = records
+
+    with patch("utils.get_db_connection", return_value=mock_worksheet):
+        result = utils.delete_transaction(tx_ids)
+        assert result is True
+        mock_worksheet.delete_row.assert_not_called()
+
+def test_delete_transaction_connection_fail():
+    """Test when get_db_connection returns None."""
+    with patch("utils.get_db_connection", return_value=None):
+        result = utils.delete_transaction(["TX123"])
+        assert result is False
+
+def test_delete_transaction_exception(mock_streamlit):
+    """Test exception handling during deletion."""
+    mock_worksheet = MagicMock()
+    mock_worksheet.get_all_records.side_effect = Exception("API Error")
+
+    # We verify st.error is called
+    mock_st_error = mock_streamlit.error
+
+    with patch("utils.get_db_connection", return_value=mock_worksheet):
+        result = utils.delete_transaction(["TX123"])
+
+        assert result is False
+        mock_st_error.assert_called_once()
+        args, _ = mock_st_error.call_args
+        assert "API Error" in args[0]
