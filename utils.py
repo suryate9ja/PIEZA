@@ -1,5 +1,4 @@
 import streamlit as st
-import os
 
 def show_global_sidebar():
     """
