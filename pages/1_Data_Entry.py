@@ -16,15 +16,17 @@ show_global_sidebar()
 st.title("Data Entry")
 st.markdown("Add new transactions manually, or upload a bank screenshot to let AI do the heavy lifting.")
 
-# Initialize draft state for extracted values
-if 'draft_tx' not in st.session_state:
-    st.session_state.draft_tx = {
-        "Date": datetime.today(),
-        "Amount": 0.0,
-        "Bank Name": "",
-        "Type": "Expense",
-        "Category": "Groceries"
-    }
+# Initialize form widget states directly in session_state instead of a draft dictionary
+if 'form_date' not in st.session_state:
+    st.session_state.form_date = datetime.today()
+if 'form_amount' not in st.session_state:
+    st.session_state.form_amount = 0.0
+if 'form_bank_name' not in st.session_state:
+    st.session_state.form_bank_name = ""
+if 'form_type' not in st.session_state:
+    st.session_state.form_type = "Expense"
+if 'form_category' not in st.session_state:
+    st.session_state.form_category = "Groceries"
 
 # Section: Auto-Read Bank Screenshot
 st.subheader("Auto-Read Bank Screenshot")
@@ -36,7 +38,6 @@ if st.session_state.gemini_api_key:
         with st.spinner("Extracting data..."):
             try:
                 genai.configure(api_key=st.session_state.gemini_api_key)
-                # Using gemini-1.5-flash which is standard for multimodal fast tasks
                 model = genai.GenerativeModel('gemini-1.5-flash')
                 
                 image = Image.open(uploaded_screenshot)
@@ -53,8 +54,6 @@ if st.session_state.gemini_api_key:
                 
                 response = model.generate_content([prompt, image])
                 
-                # Parse JSON
-                # Clean up any potential markdown formatting in response if the model didn't listen
                 raw_text = response.text.replace("```json", "").replace("```", "").strip()
                 extracted_data = json.loads(raw_text)
                 
@@ -62,14 +61,16 @@ if st.session_state.gemini_api_key:
                     parsed_date = datetime.strptime(extracted_data.get("Date", str(datetime.today().date())), "%Y-%m-%d").date()
                 except ValueError:
                     parsed_date = datetime.today().date()
+                
+                # Update widget states directly
+                st.session_state.form_date = parsed_date
+                st.session_state.form_amount = float(extracted_data.get("Amount", 0.0))
+                st.session_state.form_bank_name = str(extracted_data.get("Bank Name", ""))
+                
+                type_val = str(extracted_data.get("Type", "Expense"))
+                if type_val in ["Income", "Expense"]:
+                    st.session_state.form_type = type_val
                     
-                st.session_state.draft_tx = {
-                    "Date": parsed_date,
-                    "Amount": float(extracted_data.get("Amount", 0.0)),
-                    "Bank Name": str(extracted_data.get("Bank Name", "")),
-                    "Type": str(extracted_data.get("Type", "Expense")),
-                    "Category": st.session_state.draft_tx.get("Category", "Groceries")
-                }
                 st.success("Data extracted successfully! Please review below.")
             except Exception as e:
                 st.error(f"Error extracting data: {e}")
@@ -84,19 +85,17 @@ st.subheader("Review & Save Transaction")
 with st.form("manual_entry_form", clear_on_submit=True):
     col1, col2 = st.columns(2)
     
+    categories = ["Groceries", "Rent", "Loan EMI", "Salary", "Utilities", "Transport", "Entertainment", "Other"]
+    
     with col1:
-        tx_type = st.selectbox("Type", ["Income", "Expense"], 
-                               index=0 if st.session_state.draft_tx["Type"] == "Income" else 1, key="form_type")
-        amount = st.number_input("Amount", min_value=0.0, format="%.2f", step=10.0, 
-                                 value=float(st.session_state.draft_tx["Amount"]), key="form_amount")
-        
-        categories = ["Groceries", "Rent", "Loan EMI", "Salary", "Utilities", "Transport", "Entertainment", "Other"]
-        category = st.selectbox("Category", categories, 
-                                index=categories.index(st.session_state.draft_tx["Category"]) if st.session_state.draft_tx["Category"] in categories else 0, key="form_category")
+        # Binding directly to session_state using `key`
+        tx_type = st.selectbox("Type", ["Income", "Expense"], key="form_type")
+        amount = st.number_input("Amount", min_value=0.0, format="%.2f", step=10.0, key="form_amount")
+        category = st.selectbox("Category", categories, key="form_category")
     
     with col2:
-        date_input = st.date_input("Date", st.session_state.draft_tx["Date"], key="form_date")
-        bank_name = st.text_input("Bank Name", value=st.session_state.draft_tx["Bank Name"], key="form_bank_name")
+        date_input = st.date_input("Date", key="form_date")
+        bank_name = st.text_input("Bank Name", key="form_bank_name")
         proof_file = st.file_uploader("Upload Receipt/Bill Proof", type=["png", "jpg", "jpeg", "pdf"], key="form_proof")
 
     submit_button = st.form_submit_button("Save Transaction")
@@ -104,11 +103,8 @@ with st.form("manual_entry_form", clear_on_submit=True):
     if submit_button:
         if amount > 0:
             tx_id = str(uuid.uuid4())
-            
-            # Simple proof tracking (just filename/boolean for local test)
             has_proof = bool(proof_file is not None)
             
-            # Append to DB
             tx_data = {
                 "ID": tx_id,
                 "Profile": st.session_state.active_profile,
@@ -123,13 +119,11 @@ with st.form("manual_entry_form", clear_on_submit=True):
             if add_transaction(tx_data):
                 st.success("Transaction saved successfully to Google Sheets!")
                 
-                # Reset draft state
-                st.session_state.draft_tx = {
-                    "Date": datetime.today(),
-                    "Amount": 0.0,
-                    "Bank Name": "",
-                    "Type": "Expense",
-                    "Category": "Groceries"
-                }
+                # Reset widget states
+                st.session_state.form_date = datetime.today()
+                st.session_state.form_amount = 0.0
+                st.session_state.form_bank_name = ""
+                st.session_state.form_type = "Expense"
+                st.session_state.form_category = "Groceries"
         else:
             st.error("Please enter an amount greater than 0.")
