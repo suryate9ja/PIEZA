@@ -1,9 +1,11 @@
 import streamlit as st
-from utils import show_global_sidebar
-import google.generativeai as genai
-from PIL import Image
+import uuid
 import json
 from datetime import datetime
+from PIL import Image
+import google.generativeai as genai
+
+from utils import show_global_sidebar, add_transaction
 
 # Page config
 st.set_page_config(page_title="Data Entry - PIEZA", layout="wide")
@@ -101,10 +103,7 @@ with st.form("manual_entry_form", clear_on_submit=True):
     
     if submit_button:
         if amount > 0:
-            import uuid
             tx_id = str(uuid.uuid4())
-            
-            from utils import add_transaction
             
             # Simple proof tracking (just filename/boolean for local test)
             has_proof = bool(proof_file is not None)
