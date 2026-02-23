@@ -188,3 +188,31 @@ def delete_transaction(tx_ids_to_delete):
             return False
     return False
 
+
+def get_bank_domain(bank_name):
+    """
+    Map bank names to simplified domains for ClearBit.
+    A robust app would use a verified mapping or search API, but for simplicity we assume .com
+    """
+    if not bank_name:
+        return ""
+    # simple heuristic assuming domains like chase.com, bofa.com, etc.
+    clean_name = str(bank_name).lower().replace(" ", "")
+
+    # Add basic overrides for popular banks
+    overrides = {
+        "bankofamerica": "bankofamerica.com",
+        "bofa": "bankofamerica.com",
+        "chase": "chase.com",
+        "wellsfargo": "wellsfargo.com",
+        "citibank": "citi.com",
+        "citi": "citi.com",
+        "hdfc": "hdfcbank.com",
+        "icici": "icicibank.com",
+        "sbi": "onlinesbi.sbi",
+        "americanexpress": "americanexpress.com",
+        "amex": "americanexpress.com"
+    }
+
+    domain = overrides.get(clean_name, f"{clean_name}.com")
+    return f"https://logo.clearbit.com/{domain}"
