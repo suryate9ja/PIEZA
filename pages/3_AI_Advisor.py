@@ -54,6 +54,16 @@ if start_date > end_date:
     st.error("Start date must be before the end date.")
     st.stop()
 
+# Guard: the Date column must exist after parsing (it could be missing if the
+# sheet has rows but incorrect headers).
+if "Date" not in df.columns:
+    st.error(
+        "The 'Date' column is missing from your data. "
+        "Please ensure Row 1 of PIEZA_DB has the correct headers: "
+        "ID | Profile | Date | Type | Category | Amount | Bank Name | Has Proof"
+    )
+    st.stop()
+
 # ── Period summary metrics ─────────────────────────────────────────────────────
 period_df = df[(df["Date"] >= start_date) & (df["Date"] <= end_date)].copy()
 
