@@ -50,11 +50,10 @@ def test_delete_transaction_connection_fail():
         assert result is False
 
 def test_delete_transaction_exception(mock_streamlit):
-    """Test exception handling during deletion."""
+    """Test exception handling during deletion — st.error shows a generic message."""
     mock_worksheet = MagicMock()
     mock_worksheet.get_all_records.side_effect = Exception("API Error")
 
-    # We verify st.error is called
     mock_st_error = mock_streamlit.error
 
     with patch("utils.get_db_connection", return_value=mock_worksheet):
@@ -63,4 +62,5 @@ def test_delete_transaction_exception(mock_streamlit):
         assert result is False
         mock_st_error.assert_called_once()
         args, _ = mock_st_error.call_args
-        assert "API Error" in args[0]
+        # Error message must be the safe generic one — raw exception details must not be exposed.
+        assert args[0] == "An error occurred while deleting from Google Sheets. Please check the logs."

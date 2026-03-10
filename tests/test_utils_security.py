@@ -1,93 +1,83 @@
 import sys
 import os
 import unittest
-from unittest.mock import MagicMock
-
-# 1. Mock streamlit BEFORE importing utils
-mock_st = MagicMock()
-
-# Configure cache_resource to be a transparent decorator
-def mock_cache_resource(func=None, **kwargs):
-    if func is not None:
-        return func
-    def wrapper(f):
-        return f
-    return wrapper
-
-mock_st.cache_resource.side_effect = mock_cache_resource
-sys.modules['streamlit'] = mock_st
-
-# 2. Mock gspread BEFORE importing utils
-mock_gspread = MagicMock()
-
-# Configure gspread exceptions to be real classes
-class MockSpreadsheetNotFound(Exception):
-    pass
-
-mock_gspread.exceptions.SpreadsheetNotFound = MockSpreadsheetNotFound
-sys.modules['gspread'] = mock_gspread
+from unittest.mock import MagicMock, patch
 
 # Add project root to path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-# 3. Now import utils
+# conftest.py (loaded first by pytest) has already patched sys.modules['streamlit']
+# and imported utils. We import utils here to get the same cached module so that
+# utils.st refers to the conftest mock (the one under test).
 import utils
+
 
 class TestVulnerability(unittest.TestCase):
     def setUp(self):
-        mock_st.reset_mock()
-        mock_gspread.reset_mock()
-        # Ensure secrets are set
-        mock_st.secrets = {"gcp_service_account": {"some": "creds"}}
+        # Reset the streamlit mock that utils.st points to (conftest's mock_st).
+        utils.st.reset_mock()
+        # Restore a minimal secrets dict so get_db_connection can reach the gspread call.
+        utils.st.secrets = {"gcp_service_account": {"some": "creds"}}
 
     def test_get_db_connection_security(self):
-        """Test that get_db_connection does not leak sensitive errors."""
+        """get_db_connection must not expose raw exception details in st.error."""
         sensitive_msg = "SENSITIVE_CONNECTION_ERROR"
-        mock_gspread.service_account_from_dict.side_effect = Exception(sensitive_msg)
 
-        utils.get_db_connection()
+        # Use a distinct class for SpreadsheetNotFound so that a plain Exception
+        # raised by service_account_from_dict falls through to the generic handler.
+        class _MockSpreadsheetNotFound(Exception):
+            pass
 
-        self.assert_generic_error(sensitive_msg, "An unexpected error occurred while connecting to Google Sheets. Please check the logs.")
+        with patch('utils.gspread') as mock_gspread:
+            mock_gspread.exceptions.SpreadsheetNotFound = _MockSpreadsheetNotFound
+            mock_gspread.service_account_from_dict.side_effect = Exception(sensitive_msg)
+            utils.get_db_connection()
+
+        self.assert_generic_error(
+            sensitive_msg,
+            "An unexpected error occurred while connecting to Google Sheets. Please check the logs.",
+        )
 
     def test_add_transaction_security(self):
-        """Test that add_transaction does not leak sensitive errors."""
-        # Mock get_db_connection to return a valid worksheet
-        mock_worksheet = MagicMock()
-        mock_gspread.service_account_from_dict.return_value.open.return_value.sheet1 = mock_worksheet
-
-        # Mock append_row to raise exception
+        """add_transaction must not expose raw exception details in st.error."""
         sensitive_msg = "SENSITIVE_WRITE_ERROR"
+        mock_worksheet = MagicMock()
         mock_worksheet.append_row.side_effect = Exception(sensitive_msg)
 
-        tx_data = {"ID": "123", "Amount": 100}
-        utils.add_transaction(tx_data)
+        with patch('utils.get_db_connection', return_value=mock_worksheet):
+            utils.add_transaction({"ID": "123", "Amount": 100})
 
-        self.assert_generic_error(sensitive_msg, "An error occurred while saving to Google Sheets. Please check the logs.")
+        self.assert_generic_error(
+            sensitive_msg,
+            "An error occurred while saving to Google Sheets. Please check the logs.",
+        )
 
     def test_delete_transaction_security(self):
-        """Test that delete_transaction does not leak sensitive errors."""
-        # Mock get_db_connection to return a valid worksheet
-        mock_worksheet = MagicMock()
-        mock_gspread.service_account_from_dict.return_value.open.return_value.sheet1 = mock_worksheet
-
-        # Mock get_all_records to raise exception
+        """delete_transaction must not expose raw exception details in st.error."""
         sensitive_msg = "SENSITIVE_READ_ERROR"
+        mock_worksheet = MagicMock()
         mock_worksheet.get_all_records.side_effect = Exception(sensitive_msg)
 
-        utils.delete_transaction(["123"])
+        with patch('utils.get_db_connection', return_value=mock_worksheet):
+            utils.delete_transaction(["123"])
 
-        self.assert_generic_error(sensitive_msg, "An error occurred while deleting from Google Sheets. Please check the logs.")
+        self.assert_generic_error(
+            sensitive_msg,
+            "An error occurred while deleting from Google Sheets. Please check the logs.",
+        )
 
     def assert_generic_error(self, sensitive_msg, expected_generic_msg):
-        # Check that st.error was NOT called with the sensitive message
-        for call in mock_st.error.call_args_list:
+        """Assert that st.error was called with the generic message, not the sensitive one."""
+        for call in utils.st.error.call_args_list:
             args, _ = call
             error_msg = str(args[0])
             if sensitive_msg in error_msg:
-                self.fail(f"Vulnerability FOUND: st.error called with sensitive message: {error_msg}")
+                self.fail(
+                    f"Vulnerability FOUND: st.error called with sensitive message: {error_msg}"
+                )
 
-        # Check that st.error WAS called with the generic message
-        mock_st.error.assert_called_with(expected_generic_msg)
+        utils.st.error.assert_called_with(expected_generic_msg)
+
 
 if __name__ == '__main__':
     unittest.main()

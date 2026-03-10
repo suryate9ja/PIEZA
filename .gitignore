@@ -1,4 +1,9 @@
 .streamlit/secrets.toml
+.DS_Store
+# Root-level scratch/debug scripts (contain local paths or print credentials)
+test_gspread.py
+test_gspread_json.py
+test_secrets.py
 # Python
 __pycache__/
 *.py[cod]

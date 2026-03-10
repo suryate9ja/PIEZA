@@ -10,69 +10,176 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def show_global_sidebar() -> None:
-    st.sidebar.title("PIEZA Settings")
+def apply_custom_css() -> None:
+    """Inject shared CSS to give the app a clean, professional finance theme."""
+    st.markdown(
+        """
+        <style>
+        /* ── Page background ─────────────────────────────── */
+        [data-testid="stAppViewContainer"] > .main {
+            background-color: #f0f4f8;
+        }
 
-    if 'profiles' not in st.session_state:
+        /* ── Sidebar ─────────────────────────────────────── */
+        [data-testid="stSidebar"] > div:first-child {
+            background-color: #0f3460;
+        }
+        [data-testid="stSidebar"] h1,
+        [data-testid="stSidebar"] h2,
+        [data-testid="stSidebar"] h3,
+        [data-testid="stSidebar"] label,
+        [data-testid="stSidebar"] .stMarkdown p {
+            color: #e2e8f0 !important;
+        }
+        [data-testid="stSidebar"] .stSelectbox > label,
+        [data-testid="stSidebar"] .stTextInput > label,
+        [data-testid="stSidebar"] .stFileUploader > label {
+            color: #94a3b8 !important;
+            font-size: 0.78rem;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+
+        /* ── Page headings ───────────────────────────────── */
+        h1 {
+            color: #0f3460;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+        }
+        h2, h3 {
+            color: #1e3a5f;
+            font-weight: 600;
+        }
+
+        /* ── Metric cards ────────────────────────────────── */
+        [data-testid="metric-container"] {
+            background: #ffffff;
+            border-radius: 12px;
+            padding: 1rem 1.25rem;
+            box-shadow: 0 2px 10px rgba(15, 52, 96, 0.08);
+            border-left: 4px solid #2563eb;
+        }
+
+        /* ── Data frames ─────────────────────────────────── */
+        [data-testid="stDataFrame"] {
+            background: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(15, 52, 96, 0.08);
+            overflow: hidden;
+        }
+
+        /* ── Forms ───────────────────────────────────────── */
+        [data-testid="stForm"] {
+            background: #ffffff;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 10px rgba(15, 52, 96, 0.08);
+            border-top: 3px solid #2563eb;
+        }
+
+        /* ── Primary buttons ─────────────────────────────── */
+        .stButton > button[kind="primary"] {
+            background: linear-gradient(135deg, #0f3460 0%, #2563eb 100%);
+            color: #ffffff !important;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+            padding: 0.5rem 1.5rem;
+            transition: box-shadow 0.15s ease, transform 0.1s ease;
+        }
+        .stButton > button[kind="primary"]:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(37, 99, 235, 0.35);
+        }
+
+        /* ── Expanders ───────────────────────────────────── */
+        details[data-testid="stExpander"] summary {
+            background: #ffffff;
+            border-radius: 8px;
+            font-weight: 600;
+            color: #0f3460;
+        }
+
+        /* ── Dividers ────────────────────────────────────── */
+        hr {
+            border: none;
+            border-top: 1px solid #e2e8f0;
+            margin: 1.5rem 0;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def show_global_sidebar() -> None:
+    st.sidebar.title("⚙️ PIEZA Settings")
+
+    if "profiles" not in st.session_state:
         st.session_state.profiles = ["Default Family"]
-    if 'active_profile' not in st.session_state:
+    if "active_profile" not in st.session_state:
         st.session_state.active_profile = st.session_state.profiles[0]
-    if 'profile_pictures' not in st.session_state:
+    if "profile_pictures" not in st.session_state:
         st.session_state.profile_pictures = {}
-    if 'gemini_api_key' not in st.session_state:
+    if "gemini_api_key" not in st.session_state:
         st.session_state.gemini_api_key = st.secrets.get("gemini_api_key", "")
 
-    st.sidebar.header("User Profile")
+    st.sidebar.header("👤 User Profile")
 
     selected_profile = st.sidebar.selectbox(
-        "Select Family Member",
+        "Active Family Member",
         st.session_state.profiles,
-        index=st.session_state.profiles.index(st.session_state.active_profile)
+        index=st.session_state.profiles.index(st.session_state.active_profile),
     )
     st.session_state.active_profile = selected_profile
 
     with st.sidebar.expander("Add New Member"):
-        new_member = st.text_input("Name")
-        if st.button("Add"):
+        new_member = st.text_input("Member Name")
+        if st.button("Add Member"):
             if new_member and new_member not in st.session_state.profiles:
                 st.session_state.profiles.append(new_member)
                 st.success(f"Added {new_member}!")
                 st.rerun()
             elif new_member in st.session_state.profiles:
-                st.warning("Member already exists.")
+                st.warning("A member with that name already exists.")
 
     st.sidebar.subheader("Profile Picture")
-    uploaded_pic = st.sidebar.file_uploader("Upload Picture", type=["png", "jpg", "jpeg"])
+    uploaded_pic = st.sidebar.file_uploader(
+        "Upload Picture", type=["png", "jpg", "jpeg"]
+    )
 
     if uploaded_pic is not None:
-        st.session_state.profile_pictures[st.session_state.active_profile] = uploaded_pic.getvalue()
+        st.session_state.profile_pictures[
+            st.session_state.active_profile
+        ] = uploaded_pic.getvalue()
 
     if st.session_state.active_profile in st.session_state.profile_pictures:
         st.sidebar.image(
             st.session_state.profile_pictures[st.session_state.active_profile],
             caption=f"{st.session_state.active_profile}'s Picture",
-            width=150
+            width=150,
         )
     else:
-        st.sidebar.info("No profile picture set.")
+        st.sidebar.info("No profile picture uploaded yet.")
 
     st.sidebar.markdown("---")
 
-    st.sidebar.header("AI Integrations")
+    st.sidebar.header("🤖 AI Integrations")
     api_key = st.sidebar.text_input(
         "Gemini API Key",
         value=st.session_state.gemini_api_key,
         type="password",
-        help="Required for OCR and AI Advisor features."
+        help="Required for the AI screenshot scanner and AI Advisor features.",
     )
     if api_key != st.session_state.gemini_api_key:
         st.session_state.gemini_api_key = api_key
         st.rerun()
 
     if not st.session_state.gemini_api_key:
-        st.sidebar.warning("API Key missing. AI features will be disabled.")
+        st.sidebar.warning("API Key not set. AI features are disabled.")
     else:
-        st.sidebar.success("API Key configured.")
+        st.sidebar.success("API Key configured. AI features are active.")
 
 
 # ── Google Sheets helpers ──────────────────────────────────────────────────────
@@ -101,7 +208,7 @@ def get_db_connection() -> Optional[gspread.Worksheet]:
         return None
     except Exception as e:
         logger.error(f"Error connecting to Google Sheets: {e}", exc_info=True)
-        st.error(f"Could not connect to Google Sheets: {e}")
+        st.error("An unexpected error occurred while connecting to Google Sheets. Please check the logs.")
         return None
 
 
@@ -143,7 +250,7 @@ def add_transaction(tx_data: Dict[str, Any]) -> bool:
         return True
     except Exception as e:
         logger.error(f"Error saving to Google Sheets: {e}", exc_info=True)
-        st.error(f"Could not save transaction: {e}")
+        st.error("An error occurred while saving to Google Sheets. Please check the logs.")
         return False
 
 
@@ -164,7 +271,7 @@ def delete_transaction(tx_ids_to_delete: List[str]) -> bool:
         return True
     except Exception as e:
         logger.error(f"Error deleting from Google Sheets: {e}", exc_info=True)
-        st.error(f"Could not delete transaction: {e}")
+        st.error("An error occurred while deleting from Google Sheets. Please check the logs.")
         return False
 
 

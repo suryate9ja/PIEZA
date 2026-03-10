@@ -16,6 +16,11 @@ mock_st.cache_data = lambda func: func
 # Patch sys.modules immediately to intercept imports in test files
 sys.modules["streamlit"] = mock_st
 
+# Import utils NOW so that utils.st is bound to mock_st before any test
+# file can override sys.modules["streamlit"] with a different mock.
+import utils  # noqa: E402  (must come after sys.modules patch)
+
+
 @pytest.fixture
 def mock_streamlit():
     """Fixture to access the mocked streamlit module in tests."""
