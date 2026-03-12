@@ -3,14 +3,14 @@ import pandas as pd
 import json
 import google.generativeai as genai
 
-from utils import show_global_sidebar, fetch_transactions, apply_custom_css
+from utils import show_navbar, fetch_transactions, apply_custom_css
 
 st.set_page_config(
     page_title="AI Financial Advisor — PIEZA",
     layout="wide",
 )
 apply_custom_css()
-show_global_sidebar()
+show_navbar("AI Advisor")
 
 # ── Page header ────────────────────────────────────────────────────────────────
 st.title("AI Financial Advisor")
@@ -22,7 +22,7 @@ st.markdown(
 if not st.session_state.get("gemini_api_key"):
     st.markdown("---")
     st.warning(
-        "Add your Gemini API key in the sidebar to enable this page."
+        "Add your Gemini API key in **Settings** to enable this page."
     )
     st.stop()
 

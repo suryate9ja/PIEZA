@@ -5,14 +5,15 @@ from datetime import datetime
 from PIL import Image
 import google.generativeai as genai
 
-from utils import show_global_sidebar, add_transaction, apply_custom_css
+import pandas as pd
+from utils import show_navbar, add_transaction, fetch_transactions, apply_custom_css, show_pagination
 
 st.set_page_config(
     page_title="Data Entry — PIEZA",
     layout="wide",
 )
 apply_custom_css()
-show_global_sidebar()
+show_navbar("Data Entry")
 
 # ── Page header ────────────────────────────────────────────────────────────────
 st.title("Data Entry")
@@ -116,7 +117,7 @@ if st.session_state.get("gemini_api_key"):
                 st.error(f"Extraction failed: {e}")
 else:
     st.warning(
-        "Add your Gemini API key in the sidebar to enable the AI scanner."
+        "Add your Gemini API key in **Settings** to enable the AI scanner."
     )
 
 # ── Transaction form ───────────────────────────────────────────────────────────
@@ -209,3 +210,49 @@ with st.form("manual_entry_form", clear_on_submit=True):
                 st.session_state.form_bank_name = ""
                 st.session_state.form_type      = "Expense"
                 st.session_state.form_category  = "Groceries"
+                # Reset to page 1 so the new entry is visible at the top
+                st.session_state["de_recent_page"] = 1
+
+# ── Recent transactions ────────────────────────────────────────────────────────
+st.markdown("---")
+st.subheader("Recent Transactions")
+st.caption("Your latest entries — most recent first.")
+
+try:
+    hist_df = fetch_transactions()
+    if hist_df.empty:
+        st.info("No transactions yet. Save your first one above.")
+    else:
+        # Filter to active profile
+        active_profile = st.session_state.get("active_profile", "")
+        if active_profile and "Profile" in hist_df.columns:
+            hist_df = hist_df[hist_df["Profile"] == active_profile]
+
+        # Sort newest-first (try Date column)
+        if "Date" in hist_df.columns:
+            try:
+                hist_df = hist_df.copy()
+                hist_df["_sort_date"] = pd.to_datetime(hist_df["Date"], errors="coerce")
+                hist_df = hist_df.sort_values("_sort_date", ascending=False).drop(
+                    columns=["_sort_date"]
+                )
+            except Exception:
+                pass
+
+        RECENT_COLS = [c for c in ["Date", "Type", "Category", "Amount", "Bank Name", "Has Proof"]
+                       if c in hist_df.columns]
+
+        start, end = show_pagination("de_recent_page", len(hist_df), items_per_page=15)
+
+        st.dataframe(
+            hist_df[RECENT_COLS].iloc[start:end],
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "Date":      st.column_config.DateColumn("Date",  format="DD MMM YYYY"),
+                "Amount":    st.column_config.NumberColumn("Amount", format="%.2f"),
+                "Has Proof": st.column_config.CheckboxColumn("Has proof"),
+            },
+        )
+except Exception:
+    pass

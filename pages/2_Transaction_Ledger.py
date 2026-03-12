@@ -2,20 +2,23 @@ import streamlit as st
 import pandas as pd
 
 from utils import (
-    show_global_sidebar,
+    show_navbar,
     fetch_transactions,
     delete_transaction,
     get_bank_domain,
     create_options_map,
     apply_custom_css,
+    show_pagination,
 )
 
 st.set_page_config(
-    page_title="Transaction Ledger — PIEZA",
+    page_title="Transactions — PIEZA",
     layout="wide",
 )
 apply_custom_css()
-show_global_sidebar()
+show_navbar("Transactions")
+
+ROWS_PER_PAGE = 20
 
 # ── Page header ────────────────────────────────────────────────────────────────
 st.title("Transaction Ledger")
@@ -37,9 +40,54 @@ if df.empty:
     )
     st.stop()
 
-# ── Filters ────────────────────────────────────────────────────────────────────
+# ── Expandable search bar — centre of page ─────────────────────────────────────
 st.markdown("---")
+st.markdown('<div class="pz-search-outer">', unsafe_allow_html=True)
 
+_, s_col, _ = st.columns([1.5, 3, 1.5])
+with s_col:
+    search_query = st.text_input(
+        "search_tx",
+        placeholder="Search transactions…",
+        key="pz_tx_search",
+        label_visibility="collapsed",
+    )
+
+st.markdown("</div>", unsafe_allow_html=True)
+
+# Inject JS to animate the search input from a small pill on focus
+st.markdown(
+    """
+    <script>
+    (function() {
+        function pzInitSearch() {
+            var inputs = document.querySelectorAll('input[placeholder="Search transactions\u2026"]');
+            if (!inputs.length) { setTimeout(pzInitSearch, 300); return; }
+            var inp = inputs[0];
+            inp.style.borderRadius = '22px';
+            inp.style.transition = 'width 0.38s cubic-bezier(0.4,0,0.2,1), '
+                                  + 'border-color 0.2s, box-shadow 0.2s';
+            inp.style.width = '48px';
+            inp.style.cursor = 'pointer';
+            inp.addEventListener('focus', function() {
+                inp.style.width = '100%';
+                inp.style.cursor = 'text';
+            });
+            inp.addEventListener('blur', function() {
+                if (!inp.value) {
+                    inp.style.width = '48px';
+                    inp.style.cursor = 'pointer';
+                }
+            });
+        }
+        pzInitSearch();
+    })();
+    </script>
+    """,
+    unsafe_allow_html=True,
+)
+
+# ── Filters ────────────────────────────────────────────────────────────────────
 st.markdown(
     '<p class="section-label">Filters</p>',
     unsafe_allow_html=True,
@@ -76,6 +124,20 @@ if selected_type != "All" and "Type" in filtered_df.columns:
 if selected_category != "All" and "Category" in filtered_df.columns:
     filtered_df = filtered_df[filtered_df["Category"] == selected_category]
 
+# Apply text search
+if search_query and search_query.strip():
+    q = search_query.strip().lower()
+    mask = filtered_df.apply(
+        lambda row: row.astype(str).str.lower().str.contains(q).any(), axis=1
+    )
+    filtered_df = filtered_df[mask]
+
+# Reset to page 1 when filters/search change
+_filter_sig = f"{selected_profile}|{selected_type}|{selected_category}|{search_query}"
+if st.session_state.get("_tx_filter_sig") != _filter_sig:
+    st.session_state["_tx_filter_sig"] = _filter_sig
+    st.session_state["tx_page"] = 1
+
 # ── Summary metrics ────────────────────────────────────────────────────────────
 st.markdown("---")
 
@@ -103,7 +165,7 @@ if "Amount" in filtered_df.columns and "Type" in filtered_df.columns:
 
 st.markdown("---")
 
-# ── Transactions table ─────────────────────────────────────────────────────────
+# ── Transactions table with pagination ────────────────────────────────────────
 st.subheader("Transactions")
 
 if "Bank Name" in filtered_df.columns:
@@ -115,8 +177,12 @@ EXPECTED_COLS = [
 ]
 display_cols = [c for c in EXPECTED_COLS if c in filtered_df.columns]
 
+# Paginate
+start, end = show_pagination("tx_page", len(filtered_df), ROWS_PER_PAGE)
+page_df = filtered_df.iloc[start:end]
+
 st.dataframe(
-    filtered_df[display_cols],
+    page_df[display_cols],
     use_container_width=True,
     hide_index=True,
     column_config={
@@ -127,8 +193,6 @@ st.dataframe(
         "Type":      st.column_config.TextColumn("Type"),
     },
 )
-
-st.caption(f"Showing {len(filtered_df)} of {len(df)} transactions.")
 
 # ── Delete transactions ────────────────────────────────────────────────────────
 st.markdown("---")
